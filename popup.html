@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Tab Resource Manager</title>
+  <style>
+    :root {
+        --primary: #6366f1;
+        --primary-light: #818cf8;
+        --primary-lighter: #c7d2fe;
+        --primary-lightest: #eef2ff;
+        --primary-dark: #4f46e5;
+        --text-primary: #1e293b;
+        --text-secondary: #475569;
+        --warning-bg: #fef3c7;
+        --warning-text: #92400e;
+        --white: #ffffff;
+    }
+
+    body {
+      width: 600px;
+      min-height: 700px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+      background-color: var(--primary-lightest);
+      color: var(--text-primary);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: var(--primary-lighter);
+      border-radius: 5px;
+      flex-wrap: wrap;
+    }
+    .group-controls {
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: var(--primary-lightest);
+      border-radius: 5px;
+    }
+    .group-creator {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .color-picker {
+      display: flex;
+      gap: 5px;
+      margin: 10px 0;
+    }
+    .color-option {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .color-option.selected {
+      border-color: #000;
+    }
+    .settings {
+      margin-bottom: 20px;
+      padding: 10px;
+      background-color: var(--primary-lighter);
+      border-radius: 5px;
+    }
+    .tab-list {
+      max-height: 500px;
+      min-height: 400px;
+      overflow-y: auto;
+    }
+    .tab-group {
+      margin-bottom: 15px;
+      border-radius: 5px;
+      overflow: hidden;
+      background-color: var(--primary-lightest);
+      border-left: 4px solid var(--primary);
+      margin: 8px 0;
+      padding: 8px;
+    }
+    .group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px;
+      background-color: var(--primary-lighter);
+      border-radius: 4px;
+      margin: 5px 0;
+    }
+    .group-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .group-title {
+      font-weight: bold;
+      margin-right: 10px;
+      color: var(--primary-dark);
+      font-weight: 500;
+    }
+    .tab-count {
+      color: var(--text-secondary);
+      font-size: 0.9em;
+    }
+    .delete-group {
+      background: none;
+      border: none;
+      color: #ff4444;
+      cursor: pointer;
+      padding: 5px;
+      font-size: 16px;
+    }
+    .delete-group:hover {
+      color: #ff0000;
+    }
+    .group-actions {
+      display: flex;
+      gap: 5px;
+    }
+    .delete-button {
+      padding: 4px 8px;
+      background-color: #ff4444;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .delete-button:hover {
+      background-color: #ff0000;
+    }
+    .tab-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 8px;
+      border-bottom: 1px solid var(--primary-lighter);
+      transition: all 0.3s ease;
+      background-color: var(--white);
+    }
+    .tab-item.dragging {
+      opacity: 0.5;
+    }
+    .tab-item:hover {
+      background-color: var(--primary-lightest);
+    }
+    .tab-item.hibernated {
+      background-color: var(--primary-lightest);
+      opacity: 0.8;
+      transition: all 0.3s ease;
+    }
+    .tab-info {
+      flex-grow: 1;
+      margin: 0 10px;
+    }
+    .tab-title {
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+    .resource-info {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 4px;
+      font-size: 0.85em;
+      transition: all 0.3s ease;
+    }
+    .resource-metric {
+      display: flex;
+      align-items: center;
+      background: var(--primary-lighter);
+      color: var(--primary-dark);
+      padding: 2px 8px;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+    .resource-metric.warning {
+      background: var(--warning-bg);
+      color: var(--warning-text);
+      border: none;
+    }
+    .resource-metric i {
+      margin-right: 4px;
+      font-size: 1.1em;
+    }
+    .hibernated-info {
+      display: flex;
+      align-items: center;
+      color: var(--text-secondary);
+      font-style: italic;
+    }
+    .hibernated-info i {
+      margin-right: 4px;
+      color: var(--text-secondary);
+    }
+    .resource-bar {
+      height: 4px;
+      background: #eee;
+      border-radius: 2px;
+      margin-top: 4px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .resource-bar-fill {
+      height: 100%;
+      background: #4CAF50;
+      transition: width 0.3s ease;
+    }
+    .resource-bar-fill.high-usage {
+      background: #ff4444;
+    }
+    .hibernate-button {
+        background: var(--primary-lighter);
+        color: var(--primary-dark);
+        border: 1px solid var(--primary-light);
+        padding: 4px;
+        font-size: 1.2em;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        margin-left: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .hibernate-button:hover {
+        background: var(--primary-light);
+        color: var(--white);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+    .warning {
+      color: #ff4444;
+    }
+    .danger-button {
+        background-color: #ef4444;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .danger-button:hover {
+        background-color: #dc2626;
+    }
+    button {
+      padding: 8px 12px;
+      background-color: var(--primary);
+      color: var(--white);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      background-color: var(--primary-dark);
+    }
+    input[type="text"] {
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .group-colors {
+      display: flex;
+      gap: 5px;
+    }
+    .control-button {
+      padding: 8px 12px;
+      border: 1px solid var(--primary-lighter);
+      border-radius: 4px;
+      background: var(--white);
+      color: var(--text);
+      cursor: text;
+      min-width: 200px;
+    }
+    .control-button:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <div class="button-container">
+      <input type="text" id="searchTabs" placeholder="🔍 Tabs durchsuchen..." class="control-button">
+      <button id="groupTabs">Nach Domain gruppieren</button>
+      <button id="closeDuplicates">Duplikate schließen</button>
+      <button id="removeAllGroups" class="danger-button">Alle Gruppen entfernen</button>
+    </div>
+  </div>
+
+  <div class="group-controls">
+    <h3>Tab-Gruppen</h3>
+    <div class="group-creator">
+      <input type="text" id="groupName" placeholder="Gruppenname">
+      <div class="group-colors">
+        <div class="color-option" style="background-color: #FF6B6B" data-color="red"></div>
+        <div class="color-option" style="background-color: #4ECDC4" data-color="cyan"></div>
+        <div class="color-option" style="background-color: #45B7D1" data-color="blue"></div>
+        <div class="color-option" style="background-color: #96CEB4" data-color="green"></div>
+        <div class="color-option" style="background-color: #FFEEAD" data-color="yellow"></div>
+        <div class="color-option" style="background-color: #D4A5A5" data-color="pink"></div>
+      </div>
+      <button id="createGroup">Gruppe erstellen</button>
+    </div>
+    <button id="autoGroup">Automatisch gruppieren</button>
+  </div>
+
+  <div class="settings">
+    <h3>Ressourcen-Einstellungen</h3>
+    <div>
+      <label>
+        <input type="checkbox" id="autoHibernate"> Inaktive Tabs automatisch in Ruhezustand versetzen
+      </label>
+    </div>
+    <div>
+      <label>
+        Tabs schließen nach:
+        <select id="autoCloseTime">
+          <option value="30">30 Minuten</option>
+          <option value="60">1 Stunde</option>
+          <option value="120">2 Stunden</option>
+          <option value="never">Nie</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div id="tabList" class="tab-list">
+    <!-- Tabs werden hier dynamisch eingefügt -->
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
