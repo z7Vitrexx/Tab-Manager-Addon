@@ -1,12 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Tab Resource Manager",
-  "version": "1.0.0",
-  "description": "Effizientes Tab-Management mit Ressourcenüberwachung, Gruppierung und Hibernation-Funktion",
+  "name": "Tab Manager",
+  "version": "1.0",
+  "description": "Verwalte deine Browser-Tabs effizient",
   "permissions": [
     "tabs",
     "tabGroups",
     "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -22,9 +25,6 @@
     "32": "icons/icon32.png",
     "64": "icons/icon64.png",
     "128": "icons/icon128.png"
-  },
-  "background": {
-    "service_worker": "background.js"
   },
   "author": "Your Name",
   "homepage_url": "https://github.com/yourusername/Tab-Manager-Addon"

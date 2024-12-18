@@ -81,10 +81,8 @@ async function removeGroup(groupId) {
         const tabIds = tabs.map(tab => tab.id);
         await chrome.tabs.ungroup(tabIds);
         
-        // Entferne die Gruppe
-        await chrome.tabGroups.remove(groupId);
-        
-        updateTabList();
+        // Aktualisiere die Anzeige
+        await updateTabList();
     } catch (e) {
         console.error('Fehler beim Entfernen der Gruppe:', e);
     }
@@ -300,6 +298,8 @@ async function autoGroupByDomain() {
         
         const domains = {};
         const specialTabs = [];
+        const colors = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+        let colorIndex = 0;
 
         // 2. Gruppiere Tabs nach Domain
         for (const tab of tabs) {
@@ -313,45 +313,36 @@ async function autoGroupByDomain() {
                 const url = new URL(tab.url);
                 const hostname = url.hostname;
                 
-                // Extrahiere die Hauptdomain
+                // Extrahiere die Hauptdomain (z.B. "google.com" aus "www.google.com")
                 const domainParts = hostname.split('.');
-                let domain;
-                
-                if (domainParts.length >= 2) {
-                    // Für URLs wie "google.com", "google.co.uk"
-                    domain = domainParts[domainParts.length - 2];
-                } else {
-                    // Fallback für ungewöhnliche URLs
-                    domain = hostname;
-                }
-                
-                // Mache Domain lesbar
-                domain = domain.charAt(0).toUpperCase() + domain.slice(1);
+                const domain = domainParts.length >= 2 
+                    ? domainParts.slice(-2).join('.') 
+                    : hostname;
                 
                 if (!domains[domain]) {
-                    domains[domain] = [];
+                    domains[domain] = {
+                        tabs: [],
+                        color: colors[colorIndex % colors.length]
+                    };
+                    colorIndex++;
                 }
-                domains[domain].push(tab.id);
+                domains[domain].tabs.push(tab.id);
             } catch (e) {
                 console.log('Problem mit Tab URL:', tab.url, e);
                 specialTabs.push(tab.id);
             }
         }
 
-        // 3. Erstelle Gruppen
-        const colors = ['blue', 'red', 'green', 'yellow', 'pink', 'purple', 'cyan', 'orange'];
-        let colorIndex = 0;
-
-        // Neue Gruppen erstellen
-        for (const [domain, tabIds] of Object.entries(domains)) {
-            if (tabIds.length > 0) {
+        // 3. Erstelle Gruppen für jede Domain
+        for (const [domain, data] of Object.entries(domains)) {
+            if (data.tabs.length > 0) {
                 try {
-                    const group = await chrome.tabs.group({ tabIds });
+                    const group = await chrome.tabs.group({ tabIds: data.tabs });
                     await chrome.tabGroups.update(group, {
                         title: domain,
-                        color: colors[colorIndex % colors.length]
+                        color: data.color,
+                        collapsed: false
                     });
-                    colorIndex++;
                 } catch (e) {
                     console.error('Fehler beim Gruppieren:', domain, e);
                 }
@@ -364,7 +355,8 @@ async function autoGroupByDomain() {
                 const group = await chrome.tabs.group({tabIds: specialTabs});
                 await chrome.tabGroups.update(group, {
                     title: 'Andere',
-                    color: colors[colorIndex % colors.length]
+                    color: 'grey',
+                    collapsed: false
                 });
             } catch (e) {
                 console.error('Fehler beim Gruppieren spezieller Tabs:', e);
@@ -525,39 +517,51 @@ async function groupTabs() {
     try {
         const tabs = await chrome.tabs.query({currentWindow: true});
         const groups = {};
-        const existingGroups = await chrome.tabGroups.query({});
+        const colors = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+        let colorIndex = 0;
         
-        // Zuerst alle bestehenden Gruppen entfernen
-        for (const group of existingGroups) {
-            await chrome.tabGroups.remove(group.id);
-        }
+        // Zuerst alle Tabs aus Gruppen entfernen
+        const allTabIds = tabs.map(tab => tab.id);
+        await chrome.tabs.ungroup(allTabIds);
 
         // Tabs nach Domain gruppieren
-        tabs.forEach(tab => {
+        for (const tab of tabs) {
             try {
                 const url = new URL(tab.url);
                 // Ignoriere spezielle Chrome-URLs
                 if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
-                    return;
+                    continue;
                 }
                 const domain = url.hostname;
-                if (!groups[domain]) {
-                    groups[domain] = [];
+                
+                // Extrahiere die Hauptdomain
+                const domainParts = domain.split('.');
+                const mainDomain = domainParts.length >= 2 
+                    ? domainParts.slice(-2).join('.') 
+                    : domain;
+                
+                if (!groups[mainDomain]) {
+                    groups[mainDomain] = {
+                        tabs: [],
+                        color: colors[colorIndex % colors.length]
+                    };
+                    colorIndex++;
                 }
-                groups[domain].push(tab);
+                groups[mainDomain].tabs.push(tab);
             } catch (error) {
                 console.log('Fehler beim Verarbeiten der URL:', tab.url, error);
             }
-        });
+        }
 
         // Nur Domains mit mehr als einem Tab gruppieren
-        for (const domain in groups) {
-            if (groups[domain].length > 1) {
-                const tabIds = groups[domain].map(tab => tab.id);
+        for (const [domain, data] of Object.entries(groups)) {
+            if (data.tabs.length > 1) {
+                const tabIds = data.tabs.map(tab => tab.id);
                 const group = await chrome.tabs.group({ tabIds });
                 await chrome.tabGroups.update(group, {
                     title: domain,
-                    collapsed: false
+                    collapsed: false,
+                    color: data.color
                 });
             }
         }
@@ -565,6 +569,23 @@ async function groupTabs() {
         await updateTabList();
     } catch (error) {
         console.error('Fehler beim Gruppieren der Tabs:', error);
+    }
+}
+
+// Entfernt eine einzelne Gruppe
+async function removeGroup(groupId) {
+    try {
+        // Hole alle Tabs in dieser Gruppe
+        const tabs = await chrome.tabs.query({groupId: groupId});
+        
+        // Entferne die Tabs aus der Gruppe
+        const tabIds = tabs.map(tab => tab.id);
+        await chrome.tabs.ungroup(tabIds);
+        
+        // Aktualisiere die Anzeige
+        await updateTabList();
+    } catch (e) {
+        console.error('Fehler beim Entfernen der Gruppe:', e);
     }
 }
 
@@ -623,5 +644,98 @@ function updateResourceValues(resources) {
                 resourceBar.className = `resource-bar-fill ${isHighUsage ? 'high-usage' : ''}`;
             }
         }
+    });
+}
+
+// Konvertiert eine Hex-Farbe in die nächstgelegene Chrome-Tab-Gruppenfarbe
+function getNearestChromeColor(hexColor) {
+    const chromeColors = {
+        'blue': '#1A73E8',
+        'red': '#D93025',
+        'yellow': '#F9AB00',
+        'green': '#188038',
+        'pink': '#E51C63',
+        'purple': '#9334E6',
+        'cyan': '#00A9BB',
+        'orange': '#FA903E',
+        'grey': '#888888'
+    };
+
+    // Konvertiert Hex zu RGB
+    const hexToRgb = (hex) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b];
+    };
+
+    // Berechnet die Farbdistanz
+    const colorDistance = (color1, color2) => {
+        return Math.sqrt(
+            Math.pow(color1[0] - color2[0], 2) +
+            Math.pow(color1[1] - color2[1], 2) +
+            Math.pow(color1[2] - color2[2], 2)
+        );
+    };
+
+    const inputRgb = hexToRgb(hexColor);
+    let minDistance = Infinity;
+    let closestColor = 'grey';
+
+    for (const [name, hex] of Object.entries(chromeColors)) {
+        const distance = colorDistance(inputRgb, hexToRgb(hex));
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestColor = name;
+        }
+    }
+
+    return closestColor;
+}
+
+// Extrahiert die dominante Farbe aus einem Favicon
+async function getDominantColor(tab) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            ctx.drawImage(img, 0, 0);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            const colorCounts = {};
+            let maxCount = 0;
+            let dominantColor = '#000000';
+            
+            // Analysiere jeden Pixel
+            for (let i = 0; i < imageData.length; i += 4) {
+                const r = imageData[i];
+                const g = imageData[i + 1];
+                const b = imageData[i + 2];
+                const rgb = `rgb(${r},${g},${b})`;
+                
+                colorCounts[rgb] = (colorCounts[rgb] || 0) + 1;
+                
+                if (colorCounts[rgb] > maxCount) {
+                    maxCount = colorCounts[rgb];
+                    dominantColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                }
+            }
+            
+            resolve(getNearestChromeColor(dominantColor));
+        };
+        
+        img.onerror = function() {
+            // Fallback-Farbe bei Fehler
+            resolve('grey');
+        };
+        
+        // Versuche zuerst das Favicon zu laden
+        img.src = tab.favIconUrl || `https://www.google.com/s2/favicons?domain=${new URL(tab.url).hostname}&sz=64`;
     });
 }
